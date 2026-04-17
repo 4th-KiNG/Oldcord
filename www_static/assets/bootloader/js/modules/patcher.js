@@ -12,6 +12,8 @@ function getEnabledPatches() {
 
 const patcher = {
   css(css) {
+    let assets_cdn_url = window.assets_cdn_url;
+
     css = css
       .replaceAll(/d3dsisomax34re.cloudfront.net/g, location.host)
       .replaceAll(/url\(\/assets\//g, `url(${assets_cdn_url}/assets/`);
@@ -564,7 +566,7 @@ const patcher = {
       script = script.replaceAll(/e\.exports=n\.p/g, `e.exports="${assets_cdn_url}/assets/"`);
 
       // Disable HTTPS in insecure mode (for local testing)
-      if (location.protocol != 'https')
+      if (location.protocol !== 'https')
         script = script.replaceAll('https://', location.protocol + '//');
 
       // Do NOT interact with sentry. Better to error than send telemetry.
@@ -582,7 +584,7 @@ const patcher = {
     script = script.replace(/n\.p\+"[a-z0-9]+\.worker\.js"/, `window.userSearchWorker()`);
 
     // Enable april fools @someone experiment
-    if (release_date == 'april_1_2018' || release_date == 'april_23_2018')
+    if (release_date === 'april_1_2018' || release_date === 'april_23_2018')
       script = script.replaceAll('null!=e&&e.bucket!==f.ExperimentBuckets.CONTROL', 'true');
 
     // Replace text
@@ -608,7 +610,7 @@ const patcher = {
     }
 
     // Remove useless unknown-field error
-    if (kind == 'root')
+    if (kind === 'root')
       script = script.replace("if(!this.has(e))throw new Error('", "if(!this.has(e))return noop('");
 
     if (release_date.endsWith('_2019')) {

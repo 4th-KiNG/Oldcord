@@ -157,23 +157,6 @@ router.post(
         nick: null,
       });
 
-      const activeSessions = dispatcher.getAllActiveSessions();
-
-      for (const session of activeSessions) {
-        if (session.subscriptions && session.subscriptions[guild.id]) {
-          //if (session.user.id === sender.id) continue;
-
-          await lazyRequest.handleMemberAdd(session, guild, {
-            roles: [],
-            user: globalUtils.miniUserObject(sender),
-            joined_at: new Date().toISOString(),
-            deaf: false,
-            mute: false,
-            nick: null,
-          });
-        }
-      }
-
       await dispatcher.dispatchEventInGuild(guild, 'PRESENCE_UPDATE', {
         ...globalUtils.getUserPresence({
           user: globalUtils.miniUserObject(sender),

@@ -7,6 +7,7 @@ import globalUtils from '../../helpers/utils/globalutils.js';
 import { logText } from '../../helpers/utils/logger.ts';
 import applications from './applications.js';
 import tokens from './tokens.ts';
+import database from '../../helpers/database.js';
 
 const router = Router({ mergeParams: true });
 
@@ -54,7 +55,7 @@ router.get('/authorize', async (req, res) => {
         return res.status(404).json(errors.response_404.UNKNOWN_APPLICATION);
       }
 
-      if (!bot.public && application.owner.id != account.id) {
+      if (!bot.public && application.owner.id !== account.id) {
         return res.status(404).json(errors.response_404.UNKNOWN_APPLICATION);
       }
 
@@ -169,7 +170,7 @@ router.post('/authorize', async (req, res) => {
         return res.status(404).json(errors.response_404.UNKNOWN_APPLICATION);
       }
 
-      if (!bot.public && application.owner.id != account.id) {
+      if (!bot.public && application.owner.id !== account.id) {
         return res.status(404).json(errors.response_404.UNKNOWN_APPLICATION);
       }
 
@@ -216,7 +217,7 @@ router.post('/authorize', async (req, res) => {
       }
 
       try {
-        await global.database.joinGuild(application.bot.id, guild);
+        await database.joinGuild(application.bot.id, guild);
 
         await dispatcher.dispatchEventTo(application.bot.id, 'GUILD_CREATE', guild);
 
@@ -230,31 +231,16 @@ router.post('/authorize', async (req, res) => {
           nick: null,
         });
 
-        const activeSessions = dispatcher.getAllActiveSessions();
-
-        for (const session of activeSessions) {
-          if (session.subscriptions && session.subscriptions[guild.id]) {
-            //if (session.user.id === application.bot.id) continue;
-
-            await lazyRequest.handleMemberAdd(session, guild, {
-              user: globalUtils.miniBotObject(application.bot),
-              roles: [],
-              joined_at: new Date().toISOString(),
-              deaf: false,
-              mute: false,
-              nick: null,
-            });
-          }
-
-          await dispatcher.dispatchEventInGuild(guild, 'PRESENCE_UPDATE', {
-            ...globalUtils.getUserPresence({
-              user: globalUtils.miniUserObject(application.bot),
-            }),
-            roles: [],
-            guild_id: guild.id,
-          });
-        }
-      } catch {}
+        await dispatcher.dispatchEventInGuild(guild, 'PRESENCE_UPDATE', {
+          ...globalUtils.getUserPresence({
+            user: globalUtils.miniUserObject(application.bot),
+          }),
+          roles: [],
+          guild_id: guild.id,
+        });
+      } catch {
+        //Intentional uh
+      }
 
       return res.json({ location: `${req.protocol}://${req.get('host')}/oauth2/authorized` });
     } else {

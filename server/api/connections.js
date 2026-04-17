@@ -18,7 +18,7 @@ router.get('/:platform/authorize', async (req, res) => {
     return res.status(401).json(errors.response_401.UNAUTHORIZED);
   }
 
-  const checkPlatform = integrationConfig.find((x) => x.platform == platform);
+  const checkPlatform = integrationConfig.find((x) => x.platform === platform);
 
   if (!checkPlatform) {
     return res.status(400).json({
@@ -44,7 +44,7 @@ router.get('/:platform/callback', async (req, res) => {
   const platform = req.params.platform;
   //let state = req.params.state;
   const pending = pendingCallback.find(
-    (x) => x.user_agent == req.headers['user-agent'] && x.release_date == req.client_build,
+    (x) => x.user_agent === req.headers['user-agent'] && x.release_date === req.client_build,
   );
 
   if (!pending) {
@@ -63,7 +63,7 @@ router.get('/:platform/callback', async (req, res) => {
     return res.status(401).json(errors.response_401.UNAUTHORIZED);
   }
 
-  if (platform != 'twitch') {
+  if (platform !== 'twitch') {
     return res.status(400).json({
       code: 400,
       message: 'Unsupported platform',

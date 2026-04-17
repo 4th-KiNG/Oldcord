@@ -189,6 +189,7 @@ const lazyRequest = {
       }
     }
   },
+  /*
   handleMemberRemove: async (session, guild, memberId) => {
     const guildSubs = session.subscriptions[guild.id];
     if (!guildSubs) return;
@@ -260,6 +261,8 @@ const lazyRequest = {
 
     guild.members = guild.members.filter((m) => m.id !== memberId);
   },
+  */
+  /*
   handleMemberAdd: async (session, guild, member) => {
     const guildSubs = session.subscriptions[guild.id];
     if (!guildSubs) return;
@@ -332,6 +335,7 @@ const lazyRequest = {
       }
     }
   },
+  */
   handleMembersSync: (session, channel, guild, subData) => {
     if (!subData || !subData.ranges) return;
 
@@ -386,12 +390,14 @@ const lazyRequest = {
             groups,
             count,
           } = lazyRequest.computeMemberList(guild, channel, subData.ranges || [[0, 99]]);
+
           const listId = lazyRequest.getListId(
             otherSession,
             guild,
             channel,
             guild.roles.find((x) => x.id === guild.id),
           );
+
           const totalOnline = groups
             .filter((g) => g.id !== 'offline')
             .reduce((acc, g) => acc + g.count, 0);
@@ -476,9 +482,9 @@ const lazyRequest = {
 
     if (!guild_id || !channels) return;
 
-    const guild = socket.session.guilds.find((x) => x.id === guild_id);
+    const guild = await global.database.getGuildById(guild_id); //We are really not supposed to do this but otherwise the data would be stale with members, so, not worth it. Fuck it, bro.
 
-    if (!guild) return;
+    if (!guild) return; 
 
     if (!socket.session.subscriptions[guild_id]) {
       socket.session.subscriptions[guild_id] = {};
@@ -518,8 +524,6 @@ export const {
   getListId,
   computeMemberList,
   clearGuildSubscriptions,
-  handleMemberRemove,
-  handleMemberAdd,
   handleMembersSync,
   syncMemberList,
   fire,

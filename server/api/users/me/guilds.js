@@ -57,16 +57,6 @@ router.delete(
             id: req.params.guildid,
           });
 
-          const activeSessions = dispatcher.getAllActiveSessions();
-
-          for (const session of activeSessions) {
-            if (session.subscriptions && session.subscriptions[req.guild.id]) {
-              if (session.user.id === user.id) continue;
-
-              await lazyRequest.handleMemberRemove(session, req.guild, user.id);
-            }
-          }
-
           await dispatcher.dispatchEventInGuild(req.guild, 'GUILD_MEMBER_REMOVE', {
             type: 'leave',
             user: globalUtils.miniUserObject(user),
@@ -109,7 +99,7 @@ router.patch(
       const guild = req.guild;
 
       const usersGuildSettings = await global.database.getUsersGuildSettings(user.id);
-      let guildSettings = usersGuildSettings.find((x) => x.guild_id == guild.id);
+      let guildSettings = usersGuildSettings.find((x) => x.guild_id === guild.id);
 
       if (!guildSettings) {
         //New guild settings object
@@ -143,7 +133,7 @@ router.patch(
 
         for (const [id, newChannelOverride] of Object.entries(req.body.channel_overrides)) {
           let channelOverride = guildSettings.channel_overrides.find(
-            (x) => x.channel_id == id || x.channel_id == newChannelOverride.channel_id,
+            (x) => x.channel_id === id || x.channel_id === newChannelOverride.channel_id,
           );
 
           if (!channelOverride) {

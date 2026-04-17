@@ -194,7 +194,7 @@ async function guildDeleteRequest(req, res) {
     const user = req.account;
     const guild = req.guild;
 
-    if (guild.owner_id == user.id) {
+    if (guild.owner_id === user.id) {
       const code = req.body.code;
 
       if (code) {
@@ -229,16 +229,6 @@ async function guildDeleteRequest(req, res) {
       await dispatcher.dispatchEventTo(user.id, 'GUILD_DELETE', {
         id: req.params.guildid,
       });
-
-      const activeSessions = dispatcher.getAllActiveSessions();
-
-      for (const session of activeSessions) {
-        if (session.subscriptions && session.subscriptions[req.guild.id]) {
-          if (session.user.id === user.id) continue;
-
-          await lazyRequest.handleMemberRemove(session, req.guild, user.id);
-        }
-      }
 
       await dispatcher.dispatchEventInGuild(req.guild, 'GUILD_MEMBER_REMOVE', {
         type: 'leave',

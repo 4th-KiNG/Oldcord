@@ -52,16 +52,6 @@ router.delete(
         id: req.params.guildid,
       });
 
-      const activeSessions = dispatcher.getAllActiveSessions();
-
-      for (const session of activeSessions) {
-        if (session.subscriptions && session.subscriptions[req.guild.id]) {
-          if (session.user.id === member.user.id) continue;
-
-          await lazyRequest.handleMemberRemove(session, req.guild, member.user.id);
-        }
-      }
-
       await dispatcher.dispatchEventInGuild(req.guild, 'GUILD_MEMBER_REMOVE', {
         type: 'kick',
         moderator: globalUtils.miniUserObject(sender),
@@ -196,7 +186,7 @@ router.patch(
   async (req, res) => {
     try {
       const account = req.account;
-      const member = req.guild.members.find((y) => y.id == account.id);
+      const member = req.guild.members.find((y) => y.id === account.id);
 
       if (!member) {
         return res.status(500).json(errors.response_500.INTERNAL_SERVER_ERROR);

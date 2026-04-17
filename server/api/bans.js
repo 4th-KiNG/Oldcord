@@ -51,7 +51,7 @@ router.put(
     try {
       const sender = req.account;
 
-      if (sender.id == req.params.memberid) {
+      if (sender.id === req.params.memberid) {
         return res.status(403).json(errors.response_403.MISSING_PERMISSIONS);
       }
 
@@ -86,16 +86,6 @@ router.put(
         await dispatcher.dispatchEventTo(member.id, 'GUILD_DELETE', {
           id: req.params.guildid,
         });
-
-        const activeSessions = dispatcher.getAllActiveSessions();
-
-        for (const session of activeSessions) {
-          if (session.subscriptions && session.subscriptions[req.guild.id]) {
-            if (session.user.id === member.user.id) continue;
-
-            await lazyRequest.handleMemberRemove(session, req.guild, member.user.id);
-          }
-        }
 
         await dispatcher.dispatchEventInGuild(req.guild, 'GUILD_MEMBER_REMOVE', {
           type: 'ban',
@@ -174,13 +164,13 @@ router.delete(
     try {
       const sender = req.account;
 
-      if (sender.id == req.params.memberid) {
+      if (sender.id === req.params.memberid) {
         return res.status(403).json(errors.response_403.MISSING_PERMISSIONS);
       }
 
       const bans = await global.database.getGuildBans(req.params.guildid);
 
-      const ban = bans.find((x) => x.user.id == req.params.memberid);
+      const ban = bans.find((x) => x.user.id === req.params.memberid);
 
       if (!ban) {
         return res.status(404).json(errors.response_404.UNKNOWN_USER);

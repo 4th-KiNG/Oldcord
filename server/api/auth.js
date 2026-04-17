@@ -34,7 +34,7 @@ router.post(
         req.body.password = null;
       } else {
         if (!req.body.email) {
-          if (release_date == 'june_12_2015') {
+          if (release_date === 'june_12_2015') {
             req.body.email = `june_12_2015_app${globalUtils.generateString(10)}@oldcordapp.com`;
           } else {
             return res.status(400).json({
@@ -73,7 +73,7 @@ router.post(
         }
 
         if (!req.body.password) {
-          if (release_date == 'june_12_2015') {
+          if (release_date === 'june_12_2015') {
             req.body.password = globalUtils.generateString(20);
           } else {
             return res.status(400).json({
@@ -83,7 +83,7 @@ router.post(
           }
         } else {
           if (
-            release_date != 'june_12_2015' &&
+            release_date !== 'june_12_2015' &&
             (req.body.password.length < global.config.limits['password'].min ||
               req.body.password.length >= global.config.limits['password'].max)
           ) {
@@ -191,23 +191,6 @@ router.post(
               nick: null,
             });
 
-            const activeSessions = dispatcher.getAllActiveSessions();
-
-            for (const session of activeSessions) {
-              if (session.subscriptions && session.subscriptions[guild.id]) {
-                //if (session.user.id === account.id) continue;
-
-                await lazyRequest.handleMemberAdd(session, guild, {
-                  user: globalUtils.miniUserObject(account),
-                  roles: [],
-                  joined_at: new Date().toISOString(),
-                  deaf: false,
-                  mute: false,
-                  nick: null,
-                });
-              }
-            }
-
             await dispatcher.dispatchEventInGuild(guild, 'PRESENCE_UPDATE', {
               game_id: null,
               status: 'online',
@@ -242,7 +225,7 @@ router.post(
         }
       }
 
-      const autoJoinGuild = config.instance.flags.filter((x) =>
+      const autoJoinGuild = global.config.instance.flags.filter((x) =>
         x.toLowerCase().includes('autojoin:'),
       );
 
@@ -265,23 +248,6 @@ router.post(
             mute: false,
             nick: null,
           });
-
-          const activeSessions = dispatcher.getAllActiveSessions();
-
-          for (const session of activeSessions) {
-            if (session.subscriptions && session.subscriptions[guild.id]) {
-              //if (session.user.id === account.id) continue;
-
-              await lazyRequest.handleMemberAdd(session, guild, {
-                user: globalUtils.miniUserObject(account),
-                roles: [],
-                joined_at: new Date().toISOString(),
-                deaf: false,
-                mute: false,
-                nick: null,
-              });
-            }
-          }
 
           await dispatcher.dispatchEventInGuild(guild, 'PRESENCE_UPDATE', {
             game_id: null,

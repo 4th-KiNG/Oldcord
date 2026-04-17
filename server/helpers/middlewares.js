@@ -358,7 +358,9 @@ async function authMiddleware(req, res, next) {
         );
 
         req.cannot_pass = xSuperProperties && userAgent && !validSuperProps;
-      } catch {}
+      } catch {
+        //Intentional uh
+      }
     }
 
     if (req.cannot_pass) {

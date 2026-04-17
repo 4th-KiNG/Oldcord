@@ -15,6 +15,7 @@ import { logText } from '../helpers/utils/logger.ts';
 import Watchdog from '../helpers/watchdog.js';
 import messages from './messages.js';
 import pins from './pins.js';
+import lazyRequest from '../helpers/lazyRequest.js'
 
 const router = Router({ mergeParams: true });
 const config = globalUtils.config;
@@ -537,6 +538,7 @@ router.put(
       }
 
       await dispatcher.dispatchEventInChannel(req.guild, channel.id, 'CHANNEL_UPDATE', channel);
+      await lazyRequest.syncMemberList(req.guild, req.account.id); //do this just in case they deny/allow everyone to view a previously locked off/just unlocked channel
 
       return res.status(204).send();
     } catch (error) {
@@ -591,6 +593,7 @@ router.delete(
       }
 
       await dispatcher.dispatchEventInChannel(req.guild, channel.id, 'CHANNEL_UPDATE', channel);
+      await lazyRequest.syncMemberList(req.guild, req.account.id); //do this just in case they deny/allow everyone to view a previously locked off/just unlocked channel
 
       return res.status(204).send();
     } catch (error) {
