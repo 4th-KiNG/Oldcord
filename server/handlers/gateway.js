@@ -36,10 +36,20 @@ async function handleIdentify(socket, packet) {
     return socket.close(4004, 'Authentication failed');
   }
 
-  // Sharding safety check: if this user belongs to another shard, ask the
-  // client to reconnect through /gateway. The 4014 close code is custom but
-  // safe since clients reconnect on any non-4004/4005 close.
-  if (shardManager.isEnabled() && !shardManager.isLocal(user.id)) {
+  // Sharding affinity: when a user lands on a shard that does not match
+  // their hash, we used to close with 4014 and force a /gateway re-fetch.
+  // Legacy Discord clients (2015-17) cannot interpret custom close codes
+  // and would loop forever. Instead we accept the connection on whichever
+  // shard the client reached — the next `/gateway` REST call (made after
+  // login, when Authorization is present) routes them to the hashed shard
+  // for any future reconnects. Cross-shard dispatch keeps events flowing
+  // either way. Set sharding.strict_affinity=true in config to re-enable
+  // the 4014 redirect for clients that support it.
+  if (
+    shardManager.isEnabled() &&
+    global.config?.sharding?.strict_affinity === true &&
+    !shardManager.isLocal(user.id)
+  ) {
     return socket.close(4014, 'Wrong shard, please re-fetch /gateway');
   }
 
@@ -327,17 +337,20 @@ async function handleResume(socket, packet) {
 
   const session2 = global.sessions.get(session_id);
 
-  // Cross-shard resume: if we don't have the session locally but the index
-  // points to another (still alive) shard, ask the client to redirect.
+  // Cross-shard resume: when the original shard is alive and a strict
+  // client is connected, redirect via 4014. Legacy clients (which cannot
+  // interpret 4014) get accepted locally as a fresh session starting from
+  // the persisted seq — events buffered on the original shard are lost
+  // for that resume, but the session continues on this shard.
   if (!session2 && intershard.isEnabled()) {
     const idx = await intershard.getSessionIndex(session_id);
     if (idx && idx.shard_id !== shardManager.getSelfShardId()) {
       const status = await intershard.getShardStatus(idx.shard_id);
-      if (status && status.status === 'online') {
+      const strict = global.config?.sharding?.strict_affinity === true;
+      if (status && status.status === 'online' && strict) {
         return socket.close(4014, 'Resume on different shard; please re-fetch /gateway');
       }
-      // Original shard is dead — accept the resume locally as a new session
-      // starting from the persisted seq.
+      // Otherwise accept the resume locally.
     }
   }
 
