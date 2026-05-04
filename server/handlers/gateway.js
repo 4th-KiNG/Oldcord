@@ -1,7 +1,10 @@
 import dispatcher from '../helpers/dispatcher.js';
+import intershard from '../helpers/intershard.ts';
 import lazyRequest from '../helpers/lazyRequest.js';
 import session from '../helpers/session.js';
+import shardManager from '../helpers/shardmanager.ts';
 import globalUtils from '../helpers/utils/globalutils.js';
+import '../sharding-init.ts';
 
 const OPCODES = {
   HEARTBEAT: 1,
@@ -30,6 +33,13 @@ async function handleIdentify(socket, packet) {
 
   if (user == null || user.disabled_until) {
     return socket.close(4004, 'Authentication failed');
+  }
+
+  // Sharding safety check: if this user belongs to another shard, ask the
+  // client to reconnect through /gateway. The 4014 close code is custom but
+  // safe since clients reconnect on any non-4004/4005 close.
+  if (shardManager.isEnabled() && !shardManager.isLocal(user.id)) {
+    return socket.close(4014, 'Wrong shard, please re-fetch /gateway');
   }
 
   const providedIntents = packet.d.intents;
@@ -75,7 +85,23 @@ async function handleIdentify(socket, packet) {
   socket.session = sesh;
   socket.session.start();
 
+  if (intershard.isEnabled()) {
+    await intershard.setSessionIndex(sesh.id, {
+      shard_id: shardManager.getSelfShardId(),
+      user_id: user.id,
+      seq: 0,
+      last_seen: Date.now(),
+    });
+    await intershard.setUserShard(user.id, shardManager.getSelfShardId());
+  }
+
   await socket.session.prepareReady();
+
+  if (intershard.isEnabled() && Array.isArray(socket.session.guilds)) {
+    for (const g of socket.session.guilds) {
+      if (g?.id) await intershard.subscribeGuild(String(g.id));
+    }
+  }
 
   const pastPresence = packet.d.presence;
   let finalStatus = savedStatus;
@@ -147,10 +173,10 @@ async function handleVoiceState(socket, packet) {
     socket.current_guild = await global.database.getGuildById(guild_id);
   }
 
-  if (socket.session.channel_id != 0 && socket.current_guild) {
+  if (socket.session.channel_id !== 0 && socket.current_guild) {
     const channel = socket.current_guild.channels.find((x) => x.id === channel_id);
 
-    if (!channel || channel.type != 2) {
+    if (!channel || channel.type !== 2) {
       return;
     }
 
@@ -321,6 +347,20 @@ async function handleResume(socket, packet) {
 
   const session2 = global.sessions.get(session_id);
 
+  // Cross-shard resume: if we don't have the session locally but the index
+  // points to another (still alive) shard, ask the client to redirect.
+  if (!session2 && intershard.isEnabled()) {
+    const idx = await intershard.getSessionIndex(session_id);
+    if (idx && idx.shard_id !== shardManager.getSelfShardId()) {
+      const status = await intershard.getShardStatus(idx.shard_id);
+      if (status && status.status === 'online') {
+        return socket.close(4014, 'Resume on different shard; please re-fetch /gateway');
+      }
+      // Original shard is dead — accept the resume locally as a new session
+      // starting from the persisted seq.
+    }
+  }
+
   if (!session2) {
     const sesh = new session(
       globalUtils.generateString(16),
@@ -363,8 +403,18 @@ async function handleResume(socket, packet) {
     return socket.close(4007, 'Invalid seq');
   }
 
-  if (sesh.eventsBuffer.find((x) => x.seq == packet.d.seq)) {
+  if (sesh.eventsBuffer.find((x) => x.seq === packet.d.seq)) {
     socket.session = sesh;
+
+    if (intershard.isEnabled()) {
+      await intershard.setSessionIndex(sesh.id, {
+        shard_id: shardManager.getSelfShardId(),
+        user_id: socket.user.id,
+        seq: sesh.seq,
+        last_seen: Date.now(),
+      });
+      await intershard.setUserShard(socket.user.id, shardManager.getSelfShardId());
+    }
 
     return await socket.session.resume(sesh.seq, socket);
   } else {

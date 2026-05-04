@@ -2,6 +2,7 @@ import { constants, deflateSync } from 'zlib';
 
 import dispatcher from './dispatcher.js';
 import Intents from './intents/intents.js';
+import intershard from './intershard.ts';
 import lazyRequest from './lazyRequest.js';
 import globalUtils from './utils/globalutils.js';
 import { logText } from './utils/logger.ts';
@@ -86,7 +87,7 @@ class session {
 
       if (!valid_status.includes(status.toLowerCase())) return;
 
-      if (status.toLowerCase() != 'offline' && save_presence) {
+      if (status.toLowerCase() !== 'offline' && save_presence) {
         this.user.settings.status = status.toLowerCase();
 
         await global.database.updateSettings(this.user.id, this.user.settings);
@@ -248,7 +249,7 @@ class session {
 
     this.guilds = current_guilds;
 
-    if (current_guilds.length == 0) return;
+    if (current_guilds.length === 0) return;
 
     for (let i = 0; i < current_guilds.length; i++) {
       const guild = current_guilds[i];
@@ -280,6 +281,23 @@ class session {
     }
 
     global.sessions.delete(this.id);
+
+    if (intershard.isEnabled() && this.type === 'gateway') {
+      try {
+        await intershard.removeSessionIndex(this.id);
+        if (!uSessions || uSessions.length === 0) {
+          await intershard.removeUserShard(this.user.id);
+          // Best-effort: drop guild subscriptions for this session.
+          if (Array.isArray(this.guilds)) {
+            for (const g of this.guilds) {
+              if (g?.id) await intershard.unsubscribeGuild(String(g.id));
+            }
+          }
+        }
+      } catch (e) {
+        logText(`session.terminate intershard cleanup failed: ${e}`, 'error');
+      }
+    }
 
     if (this.type === 'gateway') {
       if (!uSessions || uSessions.length === 0) {
@@ -418,7 +436,7 @@ class session {
             });
           }
 
-          if (guild.region != 'everything' && !globalUtils.canUseServer(year, guild.region)) {
+          if (guild.region !== 'everything' && !globalUtils.canUseServer(year, guild.region)) {
             const msgid = `12792182114301050${Math.round(Math.random() * 100).toString()}`;
 
             guild.channels = [
@@ -520,7 +538,7 @@ class session {
             }
 
             if (!this.socket.channel_types_are_ints) {
-              channel.type = channel.type == 2 ? 'voice' : 'text';
+              channel.type = channel.type === 2 ? 'voice' : 'text';
             }
 
             const can_see = global.permissions.hasChannelPermissionTo(
@@ -663,7 +681,7 @@ class session {
         friend_suggestion_count: 0,
         notes: notes,
         analytics_token: globalUtils.generateString(20),
-        experiments: month == 3 && year == 2018 ? ['2018-4_april-fools'] : [], //for 2018 clients
+        experiments: month === 3 && year === 2018 ? ['2018-4_april-fools'] : [], //for 2018 clients
         connected_accounts: connectedAccounts ?? [],
         guild_experiments: [],
         user_guild_settings:
@@ -696,7 +714,7 @@ class session {
           if (guild.unavailable) {
             await this.dispatch(
               'GUILD_CREATE',
-              this.guildCache.find((x) => x.id == guild.id),
+              this.guildCache.find((x) => x.id === guild.id),
             );
           }
         }

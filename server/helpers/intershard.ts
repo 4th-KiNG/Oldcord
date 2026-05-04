@@ -106,7 +106,7 @@ class Intershard {
 
   async publishToShard(
     shard_id: number,
-    msg: Omit<IntershardMessage, 'origin_shard'>,
+    msg: { kind: string; [k: string]: unknown },
   ): Promise<void> {
     if (!this.enabled || !this.pub) return;
     if (shard_id === shardManager.getSelfShardId()) return; // no self-loop
@@ -119,7 +119,7 @@ class Intershard {
 
   async publishToGuild(
     guild_id: string,
-    msg: Omit<IntershardMessage, 'origin_shard'>,
+    msg: { kind: string; [k: string]: unknown },
   ): Promise<void> {
     if (!this.enabled || !this.pub) return;
     const fullMsg: IntershardMessage = {
