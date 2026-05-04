@@ -4,6 +4,7 @@ import lazyRequest from '../helpers/lazyRequest.js';
 import session from '../helpers/session.js';
 import shardManager from '../helpers/shardmanager.ts';
 import globalUtils from '../helpers/utils/globalutils.js';
+import voiceManager from '../helpers/voicemanager.ts';
 import '../sharding-init.ts';
 
 const OPCODES = {
@@ -135,15 +136,8 @@ async function handleVoiceState(socket, packet) {
   const self_deaf = packet.d.self_deaf;
 
   if (guild_id === null && channel_id === null) {
-    if (socket.current_guild && socket.current_guild.id && socket.user && socket.user.id) {
-      const voiceStates = global.guild_voice_states.get(socket.current_guild.id);
-
-      voiceStates.splice(
-        voiceStates.findIndex((x) => x.user_id === socket.user.id),
-        1,
-      );
-
-      global.guild_voice_states.set(socket.current_guild.id, voiceStates);
+    if (socket.current_guild?.id && socket.user?.id) {
+      await voiceManager.leaveRoom(String(socket.current_guild.id), null, String(socket.user.id));
 
       await dispatcher.dispatchEventInGuild(socket.current_guild, 'VOICE_STATE_UPDATE', {
         channel_id: channel_id,
@@ -180,8 +174,11 @@ async function handleVoiceState(socket, packet) {
       return;
     }
 
-    if (channel && channel.type === 2 && channel.user_limit > 0) {
-      const testRoom = global.rooms.filter((x) => x.room_id === `${guild_id}:${channel_id}`);
+    if (channel?.type === 2 && channel.user_limit > 0) {
+      const participants = await voiceManager.getRoomParticipants(
+        String(guild_id),
+        String(channel_id),
+      );
       const permissionCheck = global.permissions.hasChannelPermissionTo(
         channel,
         socket.current_guild,
@@ -189,23 +186,10 @@ async function handleVoiceState(socket, packet) {
         'MOVE_MEMBERS',
       );
 
-      if (testRoom && testRoom.length >= channel.user_limit && !permissionCheck) {
+      if (participants.length >= channel.user_limit && !permissionCheck) {
         return;
       } //to-do: work on moving members into the channel
     }
-  }
-
-  let room = global.rooms.find((x) => x.room_id === `${guild_id}:${channel_id}`);
-
-  if (!room) {
-    global.rooms.push({
-      room_id: `${guild_id}:${channel_id}`,
-      participants: [],
-    });
-
-    global.guild_voice_states.set(guild_id, []);
-
-    room = global.rooms.find((x) => x.room_id === `${guild_id}:${channel_id}`);
   }
 
   await dispatcher.dispatchEventInGuild(socket.current_guild, 'VOICE_STATE_UPDATE', {
@@ -221,31 +205,27 @@ async function handleVoiceState(socket, packet) {
     suppress: false,
   });
 
-  if (!room.participants.find((x) => x.user.id === socket.user.id)) {
-    room.participants.push({
-      user: globalUtils.miniUserObject(socket.user),
+  await voiceManager.joinRoom(
+    String(guild_id),
+    String(channel_id),
+    {
+      user_id: String(socket.user.id),
       ssrc: globalUtils.generateString(30),
-    });
-
-    const voiceStates = global.guild_voice_states.get(guild_id);
-
-    if (!voiceStates.find((y) => y.user_id === socket.user.id)) {
-      voiceStates.push({
-        user_id: socket.user.id,
-        session_id: socket.session.id,
-        guild_id: guild_id,
-        channel_id: channel_id,
-        mute: false,
-        deaf: false,
-        self_deaf: self_deaf,
-        self_mute: self_mute,
-        self_video: false,
-        suppress: false,
-      });
-    }
-
-    global.guild_voice_states.set(guild_id, voiceStates);
-  }
+      user: globalUtils.miniUserObject(socket.user),
+    },
+    {
+      user_id: String(socket.user.id),
+      session_id: socket.session.id,
+      guild_id: String(guild_id),
+      channel_id: String(channel_id),
+      mute: false,
+      deaf: false,
+      self_deaf: self_deaf,
+      self_mute: self_mute,
+      self_video: false,
+      suppress: false,
+    },
+  );
 
   if (!socket.inCall && socket.current_guild != null) {
     socket.session.dispatch('VOICE_SERVER_UPDATE', {
