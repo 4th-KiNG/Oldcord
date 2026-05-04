@@ -31,6 +31,24 @@ export function initShardManager(rawConfig: unknown): void {
   shardManager.init(cfg, envShardId);
   (globalThis as { shardManager?: unknown }).shardManager = shardManager;
   (globalThis as { intershard?: unknown }).intershard = intershard;
+
+  // When sharding is enabled and the self shard has its own host/port entry,
+  // override the top-level config.port / config.ws_port / config.base_url so
+  // multiple shards can run side-by-side from a single config.json (selected
+  // by the SHARD_ID env var).
+  if (shardManager.isEnabled()) {
+    const self = shardManager.getShardInfo(shardManager.getSelfShardId());
+    if (self) {
+      const c = rawConfig as { port?: number; ws_port?: number; base_url?: string };
+      c.port = self.http_port;
+      c.ws_port = self.ws_port;
+      c.base_url = self.host;
+      logText(
+        `sharding-init: shard ${self.id} bound to ${self.host}:${self.http_port} (ws ${self.ws_port})`,
+        'shard',
+      );
+    }
+  }
 }
 
 /**

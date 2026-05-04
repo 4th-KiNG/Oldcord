@@ -86,8 +86,27 @@ app.get('/games', (req, res) => {
   return res.status(200).json([]);
 });
 
+// Live failover: refresh shard health from Redis heartbeats and mark down
+// any shard that hasn't pinged recently. Without this, getShardForUser
+// happily routes to a configured shard whose process is not actually
+// running, and the client hangs on connecting.
+async function refreshShardHealth() {
+  if (!shardManager.isEnabled() || !intershard.isEnabled()) return;
+  const statuses = await intershard.getAllShardsStatus();
+  const now = Date.now();
+  for (const s of shardManager.getAllShards()) {
+    const live = statuses[s.id];
+    if (live?.status === 'online' && now - live.ts < 20_000) {
+      shardManager.markShardUp(s.id, live.ts);
+    } else {
+      shardManager.markShardDown(s.id);
+    }
+  }
+}
+
 async function resolveShardUrl(req) {
   if (!shardManager.isEnabled()) return generateGatewayURL(req);
+  await refreshShardHealth();
   const auth = req.headers.authorization;
   if (auth) {
     try {
@@ -99,9 +118,13 @@ async function resolveShardUrl(req) {
       /* fall through to default URL */
     }
   }
-  // No auth: hand back this shard's address. After IDENTIFY the shard
-  // safety-check (4014) will redirect the client through /gateway with
-  // a token if it landed on the wrong one.
+  // No auth — pick any healthy shard so an anonymous probe never lands on
+  // a dead port.
+  const healthy = shardManager.getHealthyShards();
+  if (healthy.length > 0) {
+    const addr = shardManager.getShardAddress(healthy[0]);
+    if (addr) return addr.ws;
+  }
   return generateGatewayURL(req);
 }
 

@@ -152,7 +152,13 @@ function Container() {
   useEffect(() => {
     if (triggeredRedirect) {
       const timer = setTimeout(() => {
-        window.location.href = `${window.location.protocol}//${window.location.host}`;
+        // In Vite dev mode the selector lives on its own port (5173). The
+        // launch redirect must hit the backend so clientMiddleware can serve
+        // the chosen Discord build by reading the release_date cookie.
+        const target = import.meta.env.DEV
+          ? (import.meta.env.VITE_BACKEND_URL ?? 'http://localhost:1337')
+          : `${window.location.protocol}//${window.location.host}`;
+        window.location.href = target;
       }, 500);
 
       return () => clearTimeout(timer);

@@ -96,6 +96,20 @@ async function startup(): Promise<void> {
 
 const app = express();
 
+async function refreshShardHealth(): Promise<void> {
+  if (!shardManager.isEnabled() || !intershard.isEnabled()) return;
+  const statuses = await intershard.getAllShardsStatus();
+  const now = Date.now();
+  for (const s of shardManager.getAllShards()) {
+    const live = statuses[s.id];
+    if (live?.status === 'online' && now - live.ts < 20_000) {
+      shardManager.markShardUp(s.id, live.ts);
+    } else {
+      shardManager.markShardDown(s.id);
+    }
+  }
+}
+
 function pickShardUrl(userId: string | null): string {
   if (!shardManager.isEnabled()) {
     const s = shardManager.getAllShards()[0];
@@ -119,6 +133,9 @@ function pickShardUrl(userId: string | null): string {
 }
 
 app.get('/gateway', async (req, res) => {
+  // Refresh shard liveness from Redis heartbeats before routing — without
+  // this the LB happily hands out URLs of dead shards.
+  await refreshShardHealth();
   // Auth resolution requires DB access. The LB intentionally does not
   // hold a DB connection (so it can run on a tiny VM). Resolution
   // happens via the shard's REST API: we forward the Authorization
