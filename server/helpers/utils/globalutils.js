@@ -21,8 +21,8 @@ const globalUtils = {
   badEmails: null,
   nonStandardPort: _config.includePortInUrl
     ? _config.secure
-      ? _config.port != 443
-      : _config.port != 80
+      ? _config.port !== 443
+      : _config.port !== 80
     : false,
   generateSsrc() {
     return randomBytes(4).readUInt32BE(0);
@@ -30,8 +30,23 @@ const globalUtils = {
   generateGatewayURL: (req) => {
     let host = req.headers['host'];
     if (host) host = host.split(':', 2)[0];
-    const baseUrl = _config.gateway_url == '' ? (host ?? _config.base_url) : _config.gateway_url;
-    return `${_config.secure ? 'wss' : 'ws'}://${baseUrl}${_config.includePortInWsUrl && (_config.secure ? _config.ws_port != 443 : _config.ws_port != 80) ? `:${_config.ws_port}` : ''}`;
+    const baseUrl = _config.gateway_url === '' ? (host ?? _config.base_url) : _config.gateway_url;
+    return `${_config.secure ? 'wss' : 'ws'}://${baseUrl}${_config.includePortInWsUrl && (_config.secure ? _config.ws_port !== 443 : _config.ws_port !== 80) ? `:${_config.ws_port}` : ''}`;
+  },
+  /**
+   * Picks a shard's WS URL for a specific user ID. Used by the sharded
+   * /gateway endpoint and by the loadbalancer. Falls back to the legacy
+   * generateGatewayURL when sharding is disabled or when the chosen shard
+   * has no entry in config.
+   */
+  generateShardedGatewayURL: (req, user_id, shardManager) => {
+    if (!shardManager?.isEnabled?.() || !user_id) {
+      return globalUtils.generateGatewayURL(req);
+    }
+    const shardId = shardManager.getShardForUser(String(user_id));
+    const addr = shardManager.getShardAddress(shardId);
+    if (!addr) return globalUtils.generateGatewayURL(req);
+    return addr.ws;
   },
   generateRTCServerURL: () => {
     return _config.signaling_server_url === ''
@@ -198,7 +213,7 @@ const globalUtils = {
       obj.client_build = client_build;
       obj.client_build_date = date;
       obj.plural_recipients =
-        (date.getFullYear() == 2016 && date.getMonth() >= 6) || date.getFullYear() >= 2017;
+        (date.getFullYear() === 2016 && date.getMonth() >= 6) || date.getFullYear() >= 2017;
       obj.channel_types_are_ints = obj.plural_recipients;
       if (client_build === 'thirdPartyOrMobile') {
         obj.isThirdPartyOrMobile = true;
@@ -259,8 +274,8 @@ const globalUtils = {
     ];
   },
   serverRegionToYear: (region) => {
-    return globalUtils.getRegions().find((x) => x.id.toLowerCase() == region)
-      ? globalUtils.getRegions().find((x) => x.id.toLowerCase() == region).name
+    return globalUtils.getRegions().find((x) => x.id.toLowerCase() === region)
+      ? globalUtils.getRegions().find((x) => x.id.toLowerCase() === region).name
       : 'everything';
   },
   canUseServer: (year, region) => {
@@ -323,7 +338,7 @@ const globalUtils = {
     return `${overwrite.id}_${overwrite.allow.toString()}_${overwrite.deny.toString()}_${overwrite.type}`;
   },
   SerializeOverwritesToString(overwrites) {
-    if (overwrites == null || overwrites.length == 0) {
+    if (overwrites == null || overwrites.length === 0) {
       return null;
     }
 
@@ -354,9 +369,9 @@ const globalUtils = {
     if (!req.account) return null;
 
     if (
-      guild.region != 'everything' &&
+      guild.region !== 'everything' &&
       req.client_build_date &&
-      req.client_build_date.getFullYear() != parseInt(guild.region)
+      req.client_build_date.getFullYear() !== parseInt(guild.region)
     ) {
       const sessions = global.userSessions.get(req.account.id);
 
@@ -564,7 +579,7 @@ const globalUtils = {
         user: globalUtils.miniUserObject(user2),
       });
 
-      ourRelationshipState = ourRelationships.find((x) => x.user.id == user2.id);
+      ourRelationshipState = ourRelationships.find((x) => x.user.id === user2.id);
     }
 
     if (!relationshipState) {
@@ -614,7 +629,7 @@ const globalUtils = {
           break;
 
         case '<': {
-          if (text[i++] != '@') break; //Ignore non-user mentions
+          if (text[i++] !== '@') break; //Ignore non-user mentions
 
           //Check type (optional)
           let targetArray = result.mentions;
@@ -639,7 +654,7 @@ const globalUtils = {
             }
 
             const c = text[i];
-            if (c == '>') {
+            if (c === '>') {
               //Completed valid snowflake
               break;
             }
@@ -662,23 +677,23 @@ const globalUtils = {
         case '`': {
           let startTicks = 1;
           const startIndex = i;
-          if (text[i++] == '`') {
+          if (text[i++] === '`') {
             startTicks++;
-            if (text[i++] == '`') {
+            if (text[i++] === '`') {
               startTicks++;
             }
           }
 
           let success = false;
           while (i < text.length) {
-            if (text[i++] == '`') {
+            if (text[i++] === '`') {
               let endTicks = 1;
               while (endTicks < startTicks) {
-                if (text[i++] != '`') break;
+                if (text[i++] !== '`') break;
                 endTicks++;
               }
 
-              if (endTicks >= startTicks && text[i] != '`') {
+              if (endTicks >= startTicks && text[i] !== '`') {
                 success = true;
                 break;
               }
@@ -698,7 +713,7 @@ const globalUtils = {
     }
   },
   pingPrivateChannelUser: async (private_channel, recipient_id) => {
-    let userPrivChannels = await database.getPrivateChannels(recipient_id);
+    let userPrivChannels = await global.database.getPrivateChannels(recipient_id);
 
     let sendCreate = false;
     if (!userPrivChannels) {
@@ -718,7 +733,7 @@ const globalUtils = {
       userPrivChannels.unshift(private_channel.id);
     }
 
-    await database.setPrivateChannels(recipient_id, userPrivChannels);
+    await global.database.setPrivateChannels(recipient_id, userPrivChannels);
 
     if (sendCreate) {
       await dispatcher.dispatchEventTo(recipient_id, 'CHANNEL_CREATE', function () {
@@ -777,7 +792,7 @@ const globalUtils = {
       msg.author.bot = true;
     }
 
-    if (client_build_date.getFullYear() < 2019 && msg.type >= 8 && msg.type != 12 && guild) {
+    if (client_build_date.getFullYear() < 2019 && msg.type >= 8 && msg.type !== 12 && guild) {
       let levelReachedText = '';
 
       if (boostLvlConversion[msg.type]) {
@@ -842,7 +857,7 @@ const globalUtils = {
     Object.assign(clone, channel);
 
     if (channel.recipients)
-      clone.recipients = channel.recipients.filter((r) => r.id != (req.user || user).id);
+      clone.recipients = channel.recipients.filter((r) => r.id !== (req.user || user).id);
 
     clone.is_private = clone.recipients && clone.recipients.length > 0 ? true : false;
 
@@ -889,6 +904,7 @@ export const {
   nonStandardPort,
   generateSsrc,
   generateGatewayURL,
+  generateShardedGatewayURL,
   generateRTCServerURL,
   unavailableGuildsStore,
   generateString,

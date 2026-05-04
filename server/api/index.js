@@ -4,7 +4,13 @@ import { authMiddleware, instanceMiddleware } from '../helpers/middlewares.js';
 
 const app = express();
 
-import { config, generateGatewayURL } from '../helpers/utils/globalutils.js';
+import intershard from '../helpers/intershard.ts';
+import shardManager from '../helpers/shardmanager.ts';
+import {
+  config,
+  generateGatewayURL,
+  generateShardedGatewayURL,
+} from '../helpers/utils/globalutils.js';
 import activities from './activities.ts';
 import admin from './admin.js';
 import auth from './auth.js';
@@ -80,22 +86,74 @@ app.get('/games', (req, res) => {
   return res.status(200).json([]);
 });
 
-app.get('/gateway', (req, res) => {
+async function resolveShardUrl(req) {
+  if (!shardManager.isEnabled()) return generateGatewayURL(req);
+  const auth = req.headers.authorization;
+  if (auth) {
+    try {
+      const account = await global.database.getAccountByToken(auth);
+      if (account?.id) {
+        return generateShardedGatewayURL(req, account.id, shardManager);
+      }
+    } catch {
+      /* fall through to default URL */
+    }
+  }
+  // No auth: hand back this shard's address. After IDENTIFY the shard
+  // safety-check (4014) will redirect the client through /gateway with
+  // a token if it landed on the wrong one.
+  return generateGatewayURL(req);
+}
+
+app.get('/gateway', async (req, res) => {
   return res.status(200).json({
-    url: generateGatewayURL(req),
+    url: await resolveShardUrl(req),
   });
 });
 
-app.get('/gateway/bot', (req, res) => {
+app.get('/gateway/bot', async (req, res) => {
   return res.status(200).json({
-    url: generateGatewayURL(req),
-    shards: 0,
+    url: await resolveShardUrl(req),
+    shards: shardManager.isEnabled() ? shardManager.getNumShards() : 0,
     session_start_limit: {
       total: 1,
       remaining: 1,
       reset_after: 14400000,
       max_concurrency: 1,
     },
+  });
+});
+
+app.get('/gateway/status', async (_req, res) => {
+  if (!shardManager.isEnabled()) {
+    return res.status(200).json({
+      sharding: false,
+      shards: [
+        {
+          id: 0,
+          status: 'online',
+          last_heartbeat: Date.now(),
+        },
+      ],
+    });
+  }
+  const statuses = intershard.isEnabled() ? await intershard.getAllShardsStatus() : {};
+  const shards = shardManager.getAllShards().map((s) => {
+    const live = statuses[s.id];
+    return {
+      id: s.id,
+      host: s.host,
+      ws_port: s.ws_port,
+      http_port: s.http_port,
+      status: live?.status ?? 'unknown',
+      last_heartbeat: live?.ts ?? null,
+    };
+  });
+  return res.status(200).json({
+    sharding: true,
+    self_shard: shardManager.getSelfShardId(),
+    num_shards: shardManager.getNumShards(),
+    shards,
   });
 });
 
