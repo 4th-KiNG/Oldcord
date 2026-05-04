@@ -147,7 +147,18 @@ const gateway = {
     }
 
     if (req.url.includes('encoding=etf')) {
-      socket.wantsEtf = true;
+      // erlpack is an optional native dep — if it isn't installed we cannot
+      // encode/decode ETF frames, so force-downgrade the connection to JSON.
+      // Without this, clients that requested ETF receive payloads the server
+      // failed to encode and hang on "Connecting".
+      if (erlpack !== null) {
+        socket.wantsEtf = true;
+      } else {
+        logText(
+          'Client requested encoding=etf but erlpack is not installed — falling back to JSON',
+          'warning',
+        );
+      }
     }
 
     const match = req.url.match(/[?&]v=([^&]*)/);
